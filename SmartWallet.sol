@@ -30,7 +30,7 @@ contract SmartWallet {
         payable(msg.sender).transfer(amount);
     }
 
-    function transfer(address account, uint256 amount) public {
+    function inTransfer(address account, uint256 amount) public {
         require(
             _balances[msg.sender] >= amount,
             "SmartWallet: can not transfer more than actual balance"
