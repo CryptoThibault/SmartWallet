@@ -5,15 +5,19 @@ pragma solidity ^0.8.0;
 contract SmartWallet {
     mapping(address => uint256) private _balances;
     mapping(address => bool) private _users_address;
+    mapping(address => bool) private _vips_address;
+    mapping(address => mapping(address => uint256)) private _delegations;
     uint256 private _gain;
     uint256 public _nb_address;
     uint256 public _tax;
     address public _author;
+    uint256 public _vip_price = 10 ^ 15;
 
     constructor(uint256 tax_) {
         _author = msg.sender;
         _tax = tax_;
         _users_address[msg.sender] = true;
+        _vips_address[msg.sender] = true;
         _nb_address++;
     }
 
@@ -41,17 +45,18 @@ contract SmartWallet {
     }
 
     function inTransfer(address account, uint256 amount) public {
+        uint256 _calcTax =
+            _vips_address[msg.sender] ? 0 : (amount * _tax) / 100;
         require(
-            checkAddress(account),
+            checkUser(account),
             "SmartWallet: this user don't have signed up"
         );
         require(
-            _balances[msg.sender] <= amount,
+            _balances[msg.sender] >= amount + _calcTax,
             "SmartWallet: can not transfer more than actual balance"
         );
-        uint256 _calcTax = (amount * _tax) / 100;
-        _balances[msg.sender] -= amount;
-        _balances[account] += amount - _calcTax;
+        _balances[msg.sender] -= amount + _calcTax;
+        _balances[account] += amount;
         _balances[_author] += _calcTax;
         _gain += _calcTax;
     }
@@ -74,9 +79,9 @@ contract SmartWallet {
         payable(msg.sender).transfer(amount);
     }
 
-    function addAddress(address _addr) private {
-        if (!checkAddress(_addr)) {
-            _users_address[_addr] = true;
+    function addAddress(address account) private {
+        if (!_users_address[account]) {
+            _users_address[account] = true;
             _nb_address++;
         }
     }
@@ -92,6 +97,38 @@ contract SmartWallet {
         );
         _users_address[msg.sender] = false;
         _nb_address--;
+    }
+
+    function buyVip() public {
+        require(!_vips_address[msg.sender], "SmartWallet: user already vip");
+        require(
+            _balances[msg.sender] >= _vip_price,
+            "SmartWallet: user can not buy Vip, balance too low"
+        );
+        _balances[msg.sender] -= _vip_price;
+        _balances[_author] += _vip_price;
+        _vips_address[msg.sender] = true;
+    }
+
+    function removeVip(address account) public onlyAuthor() {
+        require(_vips_address[account], "SmartWallet: not a Vip user");
+        _balances[_author] -= _vip_price;
+        _balances[account] += _vip_price;
+        _vips_address[account] = false;
+    }
+
+    function setDelegation(address account, uint256 amount) public {
+        require(
+            _vips_address[account],
+            "SmartWallet: can only delegate to a Vip user"
+        );
+        _balances[msg.sender] -= amount;
+        _delegations[account][msg.sender] += amount;
+    }
+
+    function withdrawDelegation(address account) public {
+        _balances[msg.sender] += _delegations[account][msg.sender];
+        _delegations[account][msg.sender] = 0;
     }
 
     // Read
@@ -111,7 +148,15 @@ contract SmartWallet {
         return _gain;
     }
 
-    function checkAddress(address _addr) public view returns (bool) {
-        return _users_address[_addr];
+    function checkUser(address account) public view returns (bool) {
+        return _users_address[account];
+    }
+
+    function checkVip(address account) public view returns (bool) {
+        return _vips_address[account];
+    }
+
+    function checkDelegation(address account) public view returns (uint256) {
+        return _delegations[account][msg.sender];
     }
 }
