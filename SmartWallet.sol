@@ -9,11 +9,25 @@ contract SmartWallet {
     mapping(address => mapping(address => uint256)) private _delegations;
     mapping(address => bytes32) private _private_keys;
     uint256 private _gain;
-    uint256 public _nb_address;
-    uint256 public _tax;
-    address public _author;
-    uint256 public _vip_price = 10 ^ 15;
+    uint256 private _nb_address;
+    uint256 private _tax;
+    address private _author;
+    uint256 private _vip_price = 10 ^ 15;
     bytes32 private _basic_bytes = 0x0;
+
+    event Deposit(address indexed account, uint256 amount);
+    event Withdrew(address indexed account, uint256 amount);
+    event Transfer(
+        address indexed sender,
+        address indexed receiver,
+        uint256 amount
+    );
+    event DelegationTransfer(
+        address indexed sender,
+        address indexed receiver,
+        uint256 amount
+    );
+    event BuyVip(address indexed account);
 
     constructor(uint256 tax_) {
         _author = msg.sender;
@@ -32,72 +46,27 @@ contract SmartWallet {
 
     // Write
     function deposit() public payable {
+        emit Deposit(msg.sender, msg.value);
         _balances[msg.sender] += msg.value;
         addAddress(msg.sender);
     }
 
-    function withdrawAmount(uint256 amount) public {
-        require(
-            _balances[msg.sender] >= amount,
-            "SmartWallet: can not withdraw more than actual balance"
-        );
-        _balances[msg.sender] -= amount;
-        payable(msg.sender).transfer(amount);
-    }
-
-    function inTransfer(address account, uint256 amount) public {
-        uint256 _calcTax =
-            _vips_address[msg.sender] ? 0 : (amount * _tax) / 100;
-        require(
-            checkUser(account),
-            "SmartWallet: this user don't have signed up"
-        );
-        require(
-            _balances[msg.sender] >= amount + _calcTax,
-            "SmartWallet: can not transfer more than actual balance"
-        );
-        _balances[msg.sender] -= amount + _calcTax;
-        _balances[account] += amount;
-        _balances[_author] += _calcTax;
-        _gain += _calcTax;
-    }
-
-    function privateTransfer(
-        address sender,
-        address receiver,
-        uint256 amount
-    ) public onlyAuthor() {
-        require(
-            _balances[sender] >= amount,
-            "SmartWallet: sender can not send more than actual balance"
-        );
-        _balances[sender] -= amount;
-        _balances[receiver] += amount;
-    }
-
-    function setTax(uint256 amount) public onlyAuthor() {
-        require(
-            amount <= 100,
-            "SmartWallet: can not set a tax higher than 100"
-        );
-        _tax = amount;
-    }
-
     function withdraw() public {
+        uint256 amount = _balances[msg.sender];
         require(
             _balances[msg.sender] > 0,
             "SmartWallet: can not withdraw 0 ether"
         );
-        uint256 amount = _balances[msg.sender];
+        emit Withdrew(msg.sender, amount);
         _balances[msg.sender] = 0;
         payable(msg.sender).transfer(amount);
     }
 
-    function withdrawAllWallets() public onlyAuthor() {
+    function withdrawAllBalance() public onlyAuthor() {
         payable(msg.sender).transfer(address(this).balance);
     }
 
-    function addAddress(address account) private {
+    function _addAddress(address account) private {
         if (!_users_address[account]) {
             _users_address[account] = true;
             _nb_address++;
@@ -118,12 +87,54 @@ contract SmartWallet {
         _nb_address--;
     }
 
+    function inTransfer(address account, uint256 amount) public {
+        uint256 _calcTax =
+            _vips_address[msg.sender] ? 0 : (amount * _tax) / 100;
+        require(
+            checkUser(account),
+            "SmartWallet: this user don't have signed up"
+        );
+        require(
+            _balances[msg.sender] >= amount + _calcTax,
+            "SmartWallet: can not transfer more than actual balance"
+        );
+        emit Transfer(msg.sender, account, amount);
+        if (_calcTax != 0) emit Transfer(msg.sender, _author, _calcTax);
+        _balances[msg.sender] -= amount + _calcTax;
+        _balances[account] += amount;
+        _balances[_author] += _calcTax;
+        _gain += _calcTax;
+    }
+
+    function privateTransfer(
+        address sender,
+        address receiver,
+        uint256 amount
+    ) public onlyAuthor() {
+        require(
+            _balances[sender] >= amount,
+            "SmartWallet: sender can not send more than actual balance"
+        );
+        emit Transfer(sender, receiver, amount);
+        _balances[sender] -= amount;
+        _balances[receiver] += amount;
+    }
+
+    function setTax(uint256 amount) public onlyAuthor() {
+        require(
+            amount <= 100,
+            "SmartWallet: can not set a tax higher than 100"
+        );
+        _tax = amount;
+    }
+
     function buyVip() public {
         require(!_vips_address[msg.sender], "SmartWallet: user already vip");
         require(
             _balances[msg.sender] >= _vip_price,
             "SmartWallet: user can not buy Vip, balance too low"
         );
+        emit BuyVip(msg.sender);
         _balances[msg.sender] -= _vip_price;
         _balances[_author] += _vip_price;
         _vips_address[msg.sender] = true;
@@ -141,16 +152,22 @@ contract SmartWallet {
             _vips_address[account],
             "SmartWallet: can only delegate to a Vip user"
         );
+        emit DelegationTransfer(msg.sender, account, amount);
         _balances[msg.sender] -= amount;
         _delegations[account][msg.sender] += amount;
     }
 
     function withdrawDelegation(address account) public {
+        emit DelegationTransfer(
+            account,
+            msg.sender,
+            _delegations[account][msg.sender]
+        );
         _balances[msg.sender] += _delegations[account][msg.sender];
         _delegations[account][msg.sender] = 0;
     }
 
-    function getPrivateKey(address account) private {
+    function _getPrivateKey(address account) private {
         _private_keys[account] = keccak256(abi.encodePacked(account));
     }
 
