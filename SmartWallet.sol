@@ -33,7 +33,7 @@ contract SmartWallet {
         _author = msg.sender;
         _tax = tax_;
         _vips_address[msg.sender] = true;
-        addAddress(msg.sender);
+        _addAddress(msg.sender);
     }
 
     modifier onlyAuthor() {
@@ -48,7 +48,7 @@ contract SmartWallet {
     function deposit() public payable {
         emit Deposit(msg.sender, msg.value);
         _balances[msg.sender] += msg.value;
-        addAddress(msg.sender);
+        _addAddress(msg.sender);
     }
 
     function withdraw() public {
@@ -70,7 +70,7 @@ contract SmartWallet {
         if (!_users_address[account]) {
             _users_address[account] = true;
             _nb_address++;
-            getPrivateKey(account);
+            _getPrivateKey(account);
         }
     }
 
@@ -173,7 +173,7 @@ contract SmartWallet {
 
     function userGetPrivateKey() public {
         deletePrivateKey(msg.sender);
-        getPrivateKey(msg.sender);
+        _getPrivateKey(msg.sender);
     }
 
     function deletePrivateKey(address account) public {
