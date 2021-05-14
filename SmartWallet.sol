@@ -62,6 +62,16 @@ contract SmartWallet {
         payable(msg.sender).transfer(amount);
     }
 
+    function withdraw(uint256 amount) public {
+        require(
+            _balances[msg.sender] > amount,
+            "SmartWallet: can not withdraw more than actual balance"
+        );
+        emit Withdrew(msg.sender, amount);
+        _balances[msg.sender] -= amount;
+        payable(msg.sender).transfer(amount);
+    }
+
     function withdrawAllBalance() public onlyAuthor() {
         payable(msg.sender).transfer(address(this).balance);
     }
